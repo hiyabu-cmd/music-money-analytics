@@ -1,4 +1,6 @@
 streamlit
 pandas
 plotly
+selenium
+webdriver-manager
 numpy
