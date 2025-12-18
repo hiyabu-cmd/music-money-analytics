@@ -5,53 +5,70 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.common.exceptions import TimeoutException
+import time
 import os
 
-# Streamlit app URL from environment variable (or default)
+# Streamlit app URL
 STREAMLIT_URL = os.environ.get("STREAMLIT_APP_URL", "https://music-money-analytics-6w38qnsrdok58yvctt3x5a.streamlit.app/")
 
 def main():
+    print("----------------------------------------------------------------")
+    print("Starting Strict Wake-Up Script")
+    print("----------------------------------------------------------------")
+
     options = Options()
     options.add_argument('--headless=new')
     options.add_argument('--no-sandbox')
     options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
     options.add_argument('--window-size=1920,1080')
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36")
 
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
     try:
         driver.get(STREAMLIT_URL)
-        print(f"Opened {STREAMLIT_URL}")
+        print(f"Page loaded: {driver.title}")
+        time.sleep(5) # Give it 5 seconds purely to load DOM
 
-        wait = WebDriverWait(driver, 15)
+        # 1. Try to find the Wake Up Button
         try:
-            # Look for the wake-up button
-            button = wait.until(
-                EC.element_to_be_clickable((By.XPATH, "//button[contains(text(),'Yes, get this app back up')]"))
+            # Look for button specifically
+            wake_btn = WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Yes, get this app back up')]"))
             )
-            print("Wake-up button found. Clicking...")
-            button.click()
+            print("⚠️ SLEEPING STATUS DETECTED: 'Wake Up' button found.")
+            
+            # FORCE CLICK via JavaScript (more reliable than standard .click())
+            driver.execute_script("arguments[0].click();", wake_btn)
+            print("ACTION: Clicked the button using JavaScript.")
+            
+            # Wait for reaction
+            time.sleep(10)
+            print("Waited 10s for boot-up sequence.")
 
-            # After clicking, check if it disappears
-            try:
-                wait.until(EC.invisibility_of_element_located((By.XPATH, "//button[contains(text(),'Yes, get this app back up')]")))
-                print("Button clicked and disappeared ✅ (app should be waking up)")
-            except TimeoutException:
-                print("Button was clicked but did NOT disappear ❌ (possible failure)")
-                exit(1)
+        except:
+            print("INFO: 'Wake Up' button was NOT found. Checking if app is already running...")
 
-        except TimeoutException:
-            # No button at all → app is assumed to be awake
-            print("No wake-up button found. Assuming app is already awake ✅")
+        # 2. Strict Verification - Check for YOUR App Content
+        # We look for something that ONLY exists when your app is actually running.
+        # Based on your previous prompts, your table likely has "Channel Name" or "Video Name"
+        
+        page_source = driver.page_source
+        
+        if "Channel Name" in page_source or "Video Name" in page_source or "Music Money" in page_source:
+            print("✅ SUCCESS: App content detected. The website is awake and running.")
+        else:
+            # If we don't see the button AND we don't see the app content, WE FAIL.
+            print("❌ FAILURE: Could not find 'Wake Up' button, but also could not find app content.")
+            print("Dumping first 500 characters of page source for debugging:")
+            print(page_source[:500])
+            exit(1) # Force GitHub Action to fail (Red X)
 
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        print(f"❌ CRITICAL ERROR: {e}")
         exit(1)
     finally:
         driver.quit()
-        print("Script finished.")
 
 if __name__ == "__main__":
     main()
