@@ -13,7 +13,7 @@ STREAMLIT_URL = os.environ.get("STREAMLIT_APP_URL", "https://music-money-analyti
 
 def main():
     print("----------------------------------------------------------------")
-    print("Starting Strict Wake-Up Script")
+    print("Starting Strict Wake-Up Script (Long Wait Version)")
     print("----------------------------------------------------------------")
 
     options = Options()
@@ -28,41 +28,44 @@ def main():
     try:
         driver.get(STREAMLIT_URL)
         print(f"Page loaded: {driver.title}")
-        time.sleep(5) # Give it 5 seconds purely to load DOM
+        time.sleep(5) 
 
-        # 1. Try to find the Wake Up Button
+        # --- STEP 1: WAKE UP THE APP ---
         try:
-            # Look for button specifically
             wake_btn = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Yes, get this app back up')]"))
             )
             print("⚠️ SLEEPING STATUS DETECTED: 'Wake Up' button found.")
-            
-            # FORCE CLICK via JavaScript (more reliable than standard .click())
             driver.execute_script("arguments[0].click();", wake_btn)
             print("ACTION: Clicked the button using JavaScript.")
             
-            # Wait for reaction
-            time.sleep(10)
-            print("Waited 10s for boot-up sequence.")
-
         except:
-            print("INFO: 'Wake Up' button was NOT found. Checking if app is already running...")
+            print("INFO: 'Wake Up' button not found. App might already be loading or awake.")
 
-        # 2. Strict Verification - Check for YOUR App Content
-        # We look for something that ONLY exists when your app is actually running.
-        # Based on your previous prompts, your table likely has "Channel Name" or "Video Name"
+        # --- STEP 2: WAIT FOR CONTENT (POLLING) ---
+        # Wait up to 90 seconds (18 checks * 5 seconds) for the app to load
+        print("Waiting for app to finish booting up (this can take ~60 seconds)...")
         
-        page_source = driver.page_source
+        max_retries = 18
+        success = False
         
-        if "Channel Name" in page_source or "Video Name" in page_source or "Music Money" in page_source:
-            print("✅ SUCCESS: App content detected. The website is awake and running.")
-        else:
-            # If we don't see the button AND we don't see the app content, WE FAIL.
-            print("❌ FAILURE: Could not find 'Wake Up' button, but also could not find app content.")
-            print("Dumping first 500 characters of page source for debugging:")
-            print(page_source[:500])
-            exit(1) # Force GitHub Action to fail (Red X)
+        for i in range(max_retries):
+            page_source = driver.page_source
+            
+            # Check for specific keywords from your user table
+            if "Channel Name" in page_source or "Video Name" in page_source or "Music Money" in page_source:
+                print(f"✅ SUCCESS: App content detected on attempt #{i+1}!")
+                success = True
+                break
+            
+            print(f"Attempt {i+1}/{max_retries}: Content not ready yet. Waiting 5s...")
+            time.sleep(5)
+
+        if not success:
+            print("❌ FAILURE: Timed out waiting for app content to load.")
+            # Optional: Print page title to see if it's stuck on 'Streamlit' or an error
+            print(f"Final Page Title: {driver.title}") 
+            exit(1) # Fail the Action
 
     except Exception as e:
         print(f"❌ CRITICAL ERROR: {e}")
